@@ -17,6 +17,12 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
         
+        // Configure Kestrel to listen on all interfaces
+        builder.WebHost.ConfigureKestrel(options =>
+        {
+            options.ListenAnyIP(5000);
+        });
+
         // Configure SQLite with absolute path to ensure location
         var folder = Path.Combine(Environment.CurrentDirectory, "Data");
         Directory.CreateDirectory(folder);
