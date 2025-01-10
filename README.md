@@ -67,6 +67,35 @@ curl -X POST "http://localhost:5000/users/johndoe/heartbeat?token=abc123"
 ```
 The heartbeat must be sent every minute. If no heartbeat is received for more than one minute, the user's status will automatically change to "Inactive" (1).
 
+### 8. Twitter Authentication
+
+#### Get Twitter Authentication URL
+```bash
+curl -X GET "http://localhost:5000/connect-request"
+```
+Response:
+```json
+{
+    "auth_url": "https://api.twitter.com/oauth/authorize?oauth_token=...",
+    "token": "<oauth_token>"
+}
+```
+
+#### Get Access Token
+After user authorization, use the oauth_token and oauth_verifier to get the access token:
+```bash
+curl -X GET "http://localhost:5000/get-token?oauth_token=YOUR_TOKEN&oauth_verifier=YOUR_VERIFIER"
+```
+Response:
+```json
+{
+    "oauth_token": "...",
+    "oauth_token_secret": "...",
+    "user_id": "...",
+    "screen_name": "..."
+}
+```
+
 ## Status Codes
 
 - 200 OK: Request successful
@@ -75,17 +104,8 @@ The heartbeat must be sent every minute. If no heartbeat is received for more th
 - 401 Unauthorized: Invalid or missing token
 - 404 Not Found: User not found
 
-## Security
-All PUT endpoints require authentication via the user token provided during account creation.
-
 ## UserStatus Model
 
 - 0: Active
 - 1: Inactive
 - 2: DoNotDisturb
-
-## Requirements
-
-- .NET 8.0
-- SQLite
-
