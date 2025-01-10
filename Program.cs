@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using BetterX_API.Data;
 using BetterX_API.Models;
 using BetterX_API.Services;
@@ -33,6 +33,9 @@ public class Program
 
         // Add heartbeat service
         builder.Services.AddHostedService<HeartbeatService>();
+
+        // Add TwitterAuthService to DI container
+        builder.Services.AddScoped<TwitterAuthService>();
 
         var app = builder.Build();
 
@@ -128,6 +131,24 @@ public class Program
                 File.ReadAllText(Path.Combine(Environment.CurrentDirectory, "wwwroot", "callback.html"))
                     .Replace("{{VERIFIER}}", oauth_verifier),
                 "text/html");
+        });
+
+        // Get connect request URL
+        app.MapGet("/connect-request", async (TwitterAuthService twitter) =>
+        {
+            var result = await twitter.GetRequestTokenAsync();
+            return result == null 
+                ? Results.BadRequest("Failed to get authorization URL") 
+                : Results.Ok(new { auth_url = result.Value.AuthUrl, token = result.Value.Token });
+        });
+
+        // Get access token
+        app.MapGet("/get-token", async (string oauth_token, string oauth_verifier, TwitterAuthService twitter) =>
+        {
+            var accessToken = await twitter.GetAccessTokenAsync(oauth_token, oauth_verifier);
+            return accessToken == null 
+                ? Results.BadRequest("Failed to get access token") 
+                : Results.Ok(accessToken);
         });
 
         app.Run();
