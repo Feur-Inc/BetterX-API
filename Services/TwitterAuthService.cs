@@ -1,54 +1,76 @@
-using BetterX_API.Data;
-using BetterX_API.Models;
-using Microsoft.EntityFrameworkCore;
+using RestSharp;
+using RestSharp.Authenticators;
+using System.Text.Json;
 
 namespace BetterX_API.Services;
 
-public class HeartbeatService : BackgroundService
+public class TwitterAuthService
 {
-    private readonly IServiceProvider _services;
-    private const int HEARTBEAT_TIMEOUT_SECONDS = 60;
+    private static readonly string ClientKey = "";
+    private static readonly string ClientSecret = "";
+    private static readonly string CallbackUrl = "https://tpm28.com/betterx/callback";
 
-    public HeartbeatService(IServiceProvider services)
+    public async Task<(string Token, string AuthUrl)?> GetRequestTokenAsync()
     {
-        _services = services;
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            using (var scope = _services.CreateScope())
+            var request = new RestRequest("https://api.twitter.com/oauth/request_token", Method.Post);
+            request.AddParameter("oauth_callback", CallbackUrl);
+            
+            var options = new RestClientOptions
             {
-                try
-                {
-                    var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                    var now = DateTime.UtcNow;
-                    var timeoutThreshold = now.AddSeconds(-HEARTBEAT_TIMEOUT_SECONDS);
+                Authenticator = OAuth1Authenticator.ForRequestToken(ClientKey, ClientSecret)
+            };
+            
+            using var authenticatedClient = new RestClient(options);
+            var response = await authenticatedClient.ExecuteAsync(request);
+            
+            if (!response.IsSuccessful || string.IsNullOrEmpty(response.Content))
+                return null;
 
-                    var users = await db.Users.ToListAsync(stoppingToken);
-                    foreach (var user in users)
-                    {
-                        var timeSinceLastHeartbeat = now - user.LastHeartbeat;
-                        var shouldBeActive = timeSinceLastHeartbeat.TotalSeconds > HEARTBEAT_TIMEOUT_SECONDS;
-
-                        Console.WriteLine($"User {user.Username}: Last heartbeat: {user.LastHeartbeat:yyyy-MM-dd HH:mm:ss}, Time since: {timeSinceLastHeartbeat.TotalSeconds:F1}s, Should be active: {shouldBeActive}");
-
-                        if (shouldBeActive && user.Status != UserStatus.Active)
-                        {
-                            user.Status = UserStatus.Active;
-                            await db.SaveChangesAsync(stoppingToken);
-                            Console.WriteLine($"Updated {user.Username} to Active");
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error in HeartbeatService: {ex.Message}");
-                }
-            }
-
-            await Task.Delay(TimeSpan.FromSeconds(60), stoppingToken);
+            var responseParams = ParseQueryString(response.Content);
+            var oauthToken = responseParams["oauth_token"];
+            
+            var authUrl = $"https://api.twitter.com/oauth/authorize?oauth_token={oauthToken}";
+            return (oauthToken, authUrl);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting request token: {ex.Message}");
+            return null;
         }
     }
+
+    public async Task<Dictionary<string, string>?> GetAccessTokenAsync(string oauthToken, string oauthVerifier)
+    {
+        try
+        {
+            var request = new RestRequest("https://api.twitter.com/oauth/access_token", Method.Post);
+            request.AddParameter("oauth_verifier", oauthVerifier);
+            
+            var options = new RestClientOptions
+            {
+                Authenticator = OAuth1Authenticator.ForAccessToken(
+                    ClientKey, ClientSecret, oauthToken, "", oauthVerifier)
+            };
+            
+            using var authenticatedClient = new RestClient(options);
+            var response = await authenticatedClient.ExecuteAsync(request);
+            
+            if (!response.IsSuccessful || string.IsNullOrEmpty(response.Content))
+                return null;
+
+            return ParseQueryString(response.Content);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting access token: {ex.Message}");
+            return null;
+        }
+    }
+
+    private Dictionary<string, string> ParseQueryString(string query) =>
+        query.Split('&')
+            .Select(param => param.Split('='))
+            .ToDictionary(parts => parts[0], parts => parts[1]);
 }
