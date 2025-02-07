@@ -27,7 +27,7 @@ public class HeartbeatService : BackgroundService
                     var timeoutThreshold = now.AddSeconds(-HEARTBEAT_TIMEOUT_SECONDS);
 
                     var users = await db.Users.ToListAsync(stoppingToken);
-                    foreach (var user in users)
+                    var updateTasks = users.Select(async user =>
                     {
                         var timeSinceLastHeartbeat = now - user.LastHeartbeat;
                         var isTimedOut = timeSinceLastHeartbeat.TotalSeconds > HEARTBEAT_TIMEOUT_SECONDS;
@@ -35,10 +35,14 @@ public class HeartbeatService : BackgroundService
                         if (isTimedOut && user.Status != UserStatus.Active)
                         {
                             user.Status = UserStatus.Active;
-                            await db.SaveChangesAsync(stoppingToken);
-                            Console.WriteLine($"Updated {user.Username} to Active due to timeout");
+                            Console.WriteLine($"Will update {user.Username} to Active due to timeout");
+                            return true;
                         }
-                    }
+                        return false;
+                    });
+
+                    await Task.WhenAll(updateTasks);
+                    await db.SaveChangesAsync(stoppingToken);
                 }
                 catch (Exception ex)
                 {

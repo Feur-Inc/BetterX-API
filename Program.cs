@@ -114,12 +114,21 @@ public class Program
         // Add heartbeat endpoint
         app.MapPost("/users/{username}/heartbeat", async (string username, string token, ApiDbContext db) =>
         {
-            var user = await db.Users.FirstOrDefaultAsync(u => u.Username == username);
+            var user = await db.Users
+                .AsNoTracking()  // Optimisation pour la lecture seule
+                .FirstOrDefaultAsync(u => u.Username == username);
+                
             if (user == null) return Results.NotFound();
             if (user.Token != token) return Results.Unauthorized();
 
-            user.LastHeartbeat = DateTime.UtcNow;
-            await db.SaveChangesAsync();
+            // Mise à jour avec suivi explicite
+            var userToUpdate = await db.Users.FindAsync(user.Id);
+            if (userToUpdate != null)
+            {
+                userToUpdate.LastHeartbeat = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+            }
+
             return Results.Ok();
         });
 
