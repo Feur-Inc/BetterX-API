@@ -119,7 +119,6 @@ public class Program
             if (user.Token != token) return Results.Unauthorized();
 
             user.LastHeartbeat = DateTime.UtcNow;
-            user.Status = UserStatus.Inactive;  // 1 = Inactive
             await db.SaveChangesAsync();
             return Results.Ok();
         });

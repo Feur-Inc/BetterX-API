@@ -30,15 +30,13 @@ public class HeartbeatService : BackgroundService
                     foreach (var user in users)
                     {
                         var timeSinceLastHeartbeat = now - user.LastHeartbeat;
-                        var shouldBeActive = timeSinceLastHeartbeat.TotalSeconds > HEARTBEAT_TIMEOUT_SECONDS;
+                        var isTimedOut = timeSinceLastHeartbeat.TotalSeconds > HEARTBEAT_TIMEOUT_SECONDS;
 
-                        Console.WriteLine($"User {user.Username}: Last heartbeat: {user.LastHeartbeat:yyyy-MM-dd HH:mm:ss}, Time since: {timeSinceLastHeartbeat.TotalSeconds:F1}s, Should be active: {shouldBeActive}");
-
-                        if (shouldBeActive && user.Status != UserStatus.Active)
+                        if (isTimedOut && user.Status != UserStatus.Active)
                         {
                             user.Status = UserStatus.Active;
                             await db.SaveChangesAsync(stoppingToken);
-                            Console.WriteLine($"Updated {user.Username} to Active");
+                            Console.WriteLine($"Updated {user.Username} to Active due to timeout");
                         }
                     }
                 }
